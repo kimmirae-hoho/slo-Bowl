@@ -396,13 +396,13 @@ function renderPoster(st){
 
 // ---- shared archive (db): every saved bowl lands in "bowls" ----
 // shared archive lives behind /api/bowls (Vercel function + Upstash Redis)
-let saved=null;   // {id,key}: saving again in the same visit updates the same entry
+let saved=null,lastErr='';   // {id,key}: saving again in the same visit updates the same entry
 async function archive(st){
   try{
     const r=await fetch('/api/bowls',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...st,...(saved||{})})});
-    if(!r.ok)return r.status===429?'busy':'error';
+    if(!r.ok){if(r.status===429)return 'busy';lastErr=r.status+' '+(await r.text().catch(()=>'')).slice(0,160);return 'error'}
     const j=await r.json();saved={id:j.id,key:j.key};return 'ok';
-  }catch(e){return 'error'}
+  }catch(e){lastErr=String(e&&e.message||e);return 'error'}
 }
 async function fetchBowls(){const r=await fetch('/api/bowls',{cache:'no-store'});if(!r.ok)throw new Error(r.status);return (await r.json()).bowls||[]}
 const modal=document.getElementById('modal'),saveNote=document.getElementById('saveNote');
@@ -413,7 +413,7 @@ document.getElementById('export').addEventListener('click',async()=>{
   const url=renderPoster(st).toDataURL('image/png');document.getElementById('out').src=url;document.getElementById('download').href=url;
   saveNote.textContent='아카이브에 담는 중이에요…';document.getElementById('toArchive').hidden=true;modal.hidden=false;
   const r=await archive(st);
-  saveNote.textContent={ok:'떡국 아카이브에 담겼어요.',busy:'잠시 뒤에 다시 저장해 주세요.',error:'아카이브에 담지 못했어요. 이미지는 그대로 내려받을 수 있어요.'}[r];
+  saveNote.textContent={ok:'떡국 아카이브에 담겼어요.',busy:'잠시 뒤에 다시 저장해 주세요.',error:'아카이브에 담지 못했어요. 이미지는 그대로 내려받을 수 있어요.'}[r]+(r==='error'&&lastErr?` (${lastErr})`:'');
   document.getElementById('toArchive').hidden=r!=='ok';
 });
 document.getElementById('close').addEventListener('click',()=>modal.hidden=true);

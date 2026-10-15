@@ -30,6 +30,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'method_not_allowed' });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'server_error' });
+    return res.status(500).json({ error: 'server_error', detail: String(e?.message || e).slice(0, 200) });
   }
 }
