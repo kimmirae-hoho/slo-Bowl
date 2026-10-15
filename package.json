@@ -1,0 +1,14 @@
+{
+  "name": "tteokguk-card",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@upstash/redis": "1.39.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

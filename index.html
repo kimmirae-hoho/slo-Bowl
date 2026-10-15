@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="떡국 한 그릇에 새해 마음을 담아 보내는 카드">
+<link rel="icon" href="assets/bowl-brass.png">
+<title>떡국 카드 만들기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+img{max-width:100%}
+
+/* Layout: one bowl centred on a paper ground, message right under it, sticker toolbar floating at the bottom.
+   Single deliberate paper look in every theme, so colours are set explicitly. */
+:root{
+  --paper:#f2eee6; --ink:#4a4844; --ink-soft:#77736a; --rule:#cfc9bc;
+  --bar:#45433f; --bar-fg:#f2eee6; --bar-hover:#57544f; --focus:#4a4844; --danger:#4a4844;
+  --serif:"Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;background:var(--paper);color:var(--ink)}
+body{font-family:var(--serif);margin:0;overflow:hidden}
+.screen{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(20px,4vh,40px);
+  padding:16px 16px 104px;box-sizing:border-box}
+.stage{position:relative;width:min(100%, 54vh, 560px);aspect-ratio:1;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
+.stage .bowl{position:absolute;left:6.1%;top:15%;width:87.8%;pointer-events:none;border-radius:50%/46%;outline:1.5px dashed transparent;outline-offset:6px;transition:outline-color .2s}
+.stage.bowl-on .bowl{outline-color:rgba(74,72,68,.4)}
+/* bowl picker: opens on the right when the bowl is tapped */
+.picker{position:fixed;right:calc(20px + env(safe-area-inset-right, 0px));top:50%;transform:translateY(-50%);z-index:8;
+  display:flex;flex-direction:column;gap:6px;padding:8px;background:#fffdf8;border-radius:14px;box-shadow:0 8px 24px rgba(30,25,15,.18)}
+.picker h2{font-size:12px;font-weight:400;color:var(--ink-soft);margin:2px 4px 2px;letter-spacing:.04em}
+.picker button{display:flex;flex-direction:column;align-items:center;gap:4px;width:92px;padding:8px 6px 6px;border:1.5px solid transparent;border-radius:10px;
+  background:transparent;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}
+.picker button:hover{background:rgba(74,72,68,.06)}
+.picker button[aria-pressed="true"]{border-color:var(--ink)}
+.picker button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.picker img{width:72px;height:auto;pointer-events:none}
+@media (max-width:520px){.picker{right:12px}.picker button{width:72px}.picker img{width:56px}}
+.stage::after{content:'';position:absolute;inset:0;border:1px dashed transparent;border-radius:4px;pointer-events:none;transition:border-color .2s}
+.stage.dragging::after{border-color:rgba(74,72,68,.28)}
+.st{position:absolute;cursor:grab;touch-action:none}
+.st img{width:100%;display:block;pointer-events:none}
+.st.sel{outline:1.5px dashed var(--focus);outline-offset:4px}
+.st .h{position:absolute;width:24px;height:24px;border-radius:50%;background:var(--focus);color:#fff;
+  display:none;align-items:center;justify-content:center;font:12px/1 system-ui,sans-serif;border:2px solid #fff;box-sizing:border-box}
+.st.sel .h{display:flex}
+.st .rot{right:-14px;bottom:-14px;cursor:nwse-resize}
+.st .del{left:-14px;top:-14px;background:var(--danger);cursor:pointer}
+.note{width:min(100%,440px);display:flex;flex-direction:column;align-items:center;gap:6px;flex:none}
+.note textarea,.note input{font:inherit;color:var(--ink);background:transparent;border:0;text-align:center;width:100%;
+  padding:4px 6px;border-radius:6px;resize:none;outline:none;word-break:keep-all}
+/* same width-to-size ratio as the saved image (640px of text at 28px), so lines break where they will in the image */
+.note textarea{font-size:min(clamp(15px,2.2vh,18px), calc((100vw - 48px) / 22.86));line-height:1.7;height:calc(1.7em * 3 + 8px);width:calc(22.86em + 12px);max-width:100%;overflow:hidden}
+.note .limit{font-size:12px;color:var(--ink-soft);margin:-2px 0 2px;min-height:1.4em;transition:color .2s}
+.note .limit.hit{color:var(--ink);font-weight:700}
+.note input{font-size:13px;color:var(--ink-soft);letter-spacing:.02em}
+.note textarea::placeholder,.note input::placeholder{color:#aaa497}
+.note textarea:hover,.note input:hover{background:rgba(0,0,0,.03)}
+.note textarea:focus-visible,.note input:focus-visible{background:rgba(0,0,0,.04);box-shadow:0 0 0 1.5px var(--focus)}
+
+/* floating toolbar */
+.bar{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);
+  display:flex;align-items:center;gap:4px;padding:6px;background:var(--bar);color:var(--bar-fg);border-radius:14px;
+  box-shadow:0 8px 24px rgba(30,25,15,.25);max-width:calc(100vw - 32px);box-sizing:border-box;z-index:5}
+.tray{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.tray::-webkit-scrollbar{display:none}
+.bar button{flex:none;width:48px;height:48px;border:0;border-radius:10px;background:transparent;color:inherit;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:6px;box-sizing:border-box;touch-action:none}
+.bar button:hover{background:var(--bar-hover)}
+.bar button:focus-visible{outline:2px solid var(--bar-fg);outline-offset:-2px}
+.bar .tray img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none}
+.bar .sep{flex:none;width:1px;align-self:stretch;margin:6px 4px;background:#625f59}
+.bar .act svg{width:22px;height:22px}
+.bar .save{background:var(--bar-fg);color:var(--bar)}
+.bar .save:hover{background:#fff}
+.tip{position:fixed;bottom:calc(88px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%);
+  background:#fffdf8;color:var(--ink);font-size:13px;padding:8px 12px;border-radius:10px;pointer-events:none;white-space:nowrap;z-index:6;
+  box-shadow:0 4px 14px rgba(30,25,15,.16)}
+.tip::after{content:'';position:absolute;left:50%;bottom:-6px;width:12px;height:12px;background:#fffdf8;transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.tip b{font-weight:700}
+.ghost{position:fixed;pointer-events:none;z-index:7;transform:translate(-50%,-50%)}
+
+/* first-visit guide */
+.guide{position:fixed;inset:0;background:rgba(242,238,230,.86);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;padding:16px;z-index:20;transition:opacity .35s}
+.guide.out{opacity:0}
+.guide .g{max-width:340px;display:flex;flex-direction:column;gap:22px}
+.guide h1{font-size:26px;font-weight:700;margin:0;line-height:1.35;text-wrap:balance}
+.guide ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:1.6}
+.guide li{display:grid;grid-template-columns:22px 1fr;gap:6px}
+.guide li b{font-weight:400;color:var(--ink-soft)}
+.guide .meanings{font-size:13px;color:var(--ink-soft);line-height:1.7;border-top:1px solid var(--rule);padding-top:14px}
+.guide button{align-self:flex-start;font:inherit;font-size:15px;background:var(--ink);color:var(--paper);border:0;border-radius:999px;padding:11px 22px;cursor:pointer}
+.guide button:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+@media (prefers-reduced-motion: reduce){.guide{transition:none}}
+
+.modal{position:fixed;inset:0;background:rgba(20,18,14,.78);display:flex;align-items:center;justify-content:center;padding:16px;z-index:30}
+.modal .inner{max-width:440px;width:100%;display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto;align-items:center}
+.modal img{width:100%;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.modal p{margin:0;color:#e9e5dc;font-size:13px;line-height:1.6;text-align:center}
+.modal button{font:inherit;font-size:14px;background:#f2eee6;color:#4a4844;border:0;border-radius:999px;padding:9px 20px;cursor:pointer}
+ .modal .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.modal .dl{font-size:14px;background:#f2eee6;color:#4a4844;border-radius:999px;padding:9px 20px;text-decoration:none}
+.modal .save-note{color:#fff;font-size:14px}
+#toArchive{background:#4a4844;color:#f2eee6;box-shadow:inset 0 0 0 1px #f2eee6}
+.corner{position:fixed;top:calc(16px + env(safe-area-inset-top, 0px));right:20px;z-index:4;font-size:13px;color:var(--ink);
+  font-family:inherit;border:1px solid var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer;background:var(--paper)}
+.corner:hover{background:var(--ink);color:var(--paper)}
+.corner:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+body.arc-open .screen,body.arc-open .bar,body.arc-open .corner{visibility:hidden}
+
+/* archive: free-floating bowls with name tags, like a table seen from above */
+.archive{position:fixed;inset:0;z-index:15;background:var(--paper);overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.archive.grabbing{cursor:grabbing}
+.world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+.item{position:absolute;left:0;top:0;width:300px;padding:0;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;font:inherit}
+.item canvas{width:300px;height:300px;display:block;pointer-events:none}
+.item .tag{font-size:13px;color:var(--ink);border:1px solid var(--ink);border-radius:999px;padding:3px 12px;background:var(--paper);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.item:hover .tag,.item:focus-visible .tag{background:var(--ink);color:var(--paper)}
+.item:focus-visible{outline:none}
+.arc-head{position:fixed;top:calc(18px + env(safe-area-inset-top, 0px));left:20px;display:flex;gap:10px;align-items:baseline;font-size:15px;color:var(--ink)}
+.arc-head .count{font-size:13px;color:var(--ink-soft)}
+.arc-close{position:fixed;top:calc(14px + env(safe-area-inset-top, 0px));right:20px;font:inherit;font-size:13px;background:var(--ink);color:var(--paper);border:0;border-radius:999px;padding:7px 14px;cursor:pointer}
+.arc-close:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.arc-empty{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:none}
+.arc-empty p{max-width:300px;text-align:center;color:var(--ink-soft);font-size:15px;line-height:1.7}
+.arc-hint{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);margin:0;font-size:13px;color:var(--ink);
+  background:#fffdf8;border-radius:999px;padding:9px 16px;box-shadow:0 4px 14px rgba(30,25,15,.12);white-space:nowrap;pointer-events:none;transition:opacity .4s}
+.arc-hint.gone{opacity:0}
+</style>
+</head>
+<body>
+
+
+<main class="screen">
+  <div class="stage" id="stage">
+    <img class="bowl" id="bowl" alt="떡국 그릇">
+  </div>
+  <div class="note">
+    <label for="msg" hidden>새해 인사</label>
+    <textarea id="msg" maxlength="90" placeholder="그릇 아래에 새해 인사를 적어 주세요" aria-describedby="limit"></textarea>
+    <p class="limit" id="limit">새해 인사는 3줄까지 적을 수 있어요</p>
+    <label for="from" hidden>보내는 분</label>
+    <input id="from" maxlength="16" placeholder="보내는 분">
+  </div>
+</main>
+
+<nav class="bar" aria-label="스티커">
+  <div class="tray" id="tray"></div>
+  <span class="sep"></span>
+  <button class="act" id="clear" type="button" title="그릇 비우기" aria-label="그릇 비우기">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>
+  </button>
+  <button class="act save" id="export" type="button" title="이미지로 저장" aria-label="이미지로 저장">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+  </button>
+</nav>
+<button class="corner" id="openArchive" type="button">떡국 아카이브</button>
+<div class="tip" id="tip" hidden></div>
+<div class="picker" id="picker" role="group" aria-label="그릇 고르기" hidden><h2>그릇</h2></div>
+
+<div class="guide" id="guide">
+  <div class="g">
+    <h1>떡국 한 그릇에<br>새해 마음을 담아 보내세요</h1>
+    <ol>
+      <li><b>1</b>아래 스티커를 눌러 그릇에 담아요. 스티커에 마우스를 올리면 재료의 의미가 보여요. 끌어서 옮기고, 손잡이로 돌리거나 크기를 바꿔요.</li>
+      <li><b>2</b>그릇을 누르면 다른 그릇으로 바꿀 수 있어요.</li>
+      <li><b>3</b>그릇 아래에 새해 인사와 보내는 분을 적어요.</li>
+      <li><b>4</b>오른쪽 아래 저장 버튼을 누르면 카드 이미지가 완성돼요.</li>
+    </ol>
+    <button id="start" type="button">시작하기</button>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="inner">
+    <img id="out" alt="완성된 떡국 카드">
+    <p class="save-note" id="saveNote"></p>
+    <div class="row"><a id="download" class="dl" download="tteokguk-card.png">이미지 내려받기</a><button id="toArchive" type="button" hidden>아카이브 보기</button><button id="close" type="button">닫기</button></div>
+    <p>휴대폰에서 내려받기가 안 되면 이미지를 길게 눌러 저장하세요.</p>
+  </div>
+</div>
+
+<section class="archive" id="archive" aria-label="떡국 아카이브" hidden>
+  <div class="world" id="world"></div>
+  <header class="arc-ui arc-head"><span>떡국 아카이브</span><span class="count" id="arcCount"></span></header>
+  <button class="arc-ui arc-close" id="closeArchive" type="button">카드 만들기</button>
+  <div class="arc-ui arc-empty" id="arcEmpty" hidden><p>아직 담긴 떡국이 없어요. 첫 그릇을 만들어 저장해 보세요.</p></div>
+  <p class="arc-ui arc-hint">끌어서 둘러보고, 스크롤해서 크게 보세요</p>
+</section>
+
+<script>
+const ASSETS={"tteok": "assets/tteok.png", "mandu": "assets/mandu.png", "mushroom": "assets/mushroom.png", "tomato": "assets/tomato.png", "egg-deep": "assets/egg-deep.png", "egg-light": "assets/egg-light.png", "clover": "assets/clover.png", "horse-sit": "assets/horse-sit.png", "horse-stand": "assets/horse-stand.png", "bowl-brass": "assets/bowl-brass.png", "bowl-white": "assets/bowl-white.png", "bowl-bok": "assets/bowl-bok.png", "logo": "assets/logo.png"};
+const YEAR='2026', YEAR_NAME='병오년 · 붉은 말의 해';
+// stage units: 1000 x 1000. Bowl art placed the same way as on the printed cover.
+const S=1000, BOWL={x:61,y:150,w:878,h:820}, BROTH={x:499,y:511,rx:400,ry:270};
+// size = printed width in stage units (real scale from the sticker sheet)
+const STICKERS={
+  tteok:{name:'가래떡',mean:'재물',size:161,tip:'재물을 의미해요.'},
+  mandu:{name:'만두',mean:'복',size:239,tip:'복을 의미해요.'},
+  mushroom:{name:'버섯',mean:'성장',size:217,tip:'성장을 의미해요.'},
+  tomato:{name:'토마토',mean:'여유',size:212,tip:'여유를 의미해요.'},
+  'egg-deep':{name:'달걀 지단',mean:'건강',size:151,tip:'건강을 의미해요.'},
+  'egg-light':{name:'달걀 지단',mean:'건강',size:151,tip:'건강을 의미해요.'},
+  clover:{name:'클로버',mean:'행운',size:214,tip:'행운을 의미해요.'},
+  'horse-sit':{name:'붉은 말',mean:'',size:330,top:true,tip:'2026년 병오년의 띠예요.'},
+  'horse-stand':{name:'붉은 말',mean:'',size:330,top:true,tip:'2026년 병오년의 띠예요.'},
+};
+const imgs={};
+const loadImg=src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(i);i.src=src});
+const BOWLS={'bowl-brass':'놋그릇','bowl-white':'백자','bowl-bok':'복 그릇'};
+let bowlKey='bowl-brass';
+const ready=Promise.all([...Object.keys(STICKERS),...Object.keys(BOWLS),'logo'].map(async k=>{imgs[k]=await loadImg(ASSETS[k])}));
+const ratio=k=>imgs[k]&&imgs[k].naturalWidth?imgs[k].naturalHeight/imgs[k].naturalWidth:1;
+const bowlEl=document.getElementById('bowl');bowlEl.src=ASSETS[bowlKey];
+
+const stage=document.getElementById('stage');
+const msg=document.getElementById('msg'),from=document.getElementById('from');
+let items=[],sel=null;
+
+// keep the whole sticker (as rotated) inside the stage, so it never runs into the text areas
+function keepIn(it){
+  const w=it.s,h=it.s*ratio(it.type),a=it.r*Math.PI/180,c=Math.abs(Math.cos(a)),s=Math.abs(Math.sin(a));
+  const hx=Math.min(S/2,(w*c+h*s)/2),hy=Math.min(S/2,(w*s+h*c)/2);
+  it.x=Math.max(hx,Math.min(S-hx,it.x));it.y=Math.max(hy,Math.min(S-hy,it.y));
+}
+function place(it){
+  keepIn(it);const el=it.el;
+  el.style.left=(it.x/S*100)+'%';el.style.top=(it.y/S*100)+'%';el.style.width=(it.s/S*100)+'%';
+  el.style.transform=`translate(-50%,-50%) rotate(${it.r}deg)`;
+}
+function select(it){items.forEach(o=>o.el.classList.toggle('sel',o===it));sel=it}
+function randomSpot(type){
+  if(STICKERS[type].top)return[260+Math.random()*480,170];
+  // try a few spots in the broth and take the one farthest from what is already there
+  let best=null,bestD=-1;
+  for(let n=0;n<24;n++){
+    const a=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*.66;
+    const p=[BROTH.x+Math.cos(a)*BROTH.rx*d,BROTH.y+Math.sin(a)*BROTH.ry*d];
+    const near=items.filter(i=>!STICKERS[i.type].top).reduce((m,i)=>Math.min(m,Math.hypot(i.x-p[0],i.y-p[1])),1e9);
+    if(near>bestD){bestD=near;best=p}
+  }
+  return best;
+}
+function add(type,x,y,r){
+  const d=STICKERS[type];if(x==null)[x,y]=randomSpot(type);
+  const it={type,x,y,s:d.size,r:r??Math.round((Math.random()-.5)*50)};
+  const el=document.createElement('div');el.className='st';
+  el.innerHTML=`<img alt="${d.name}" src="${ASSETS[type]}"><span class="h del" title="떼기">✕</span><span class="h rot" title="돌리기·크기">↻</span>`;
+  it.el=el;stage.appendChild(el);items.push(it);place(it);bind(it);select(it);return it;
+}
+function remove(it){it.el.remove();items=items.filter(o=>o!==it);if(sel===it)sel=null}
+const toStage=(e)=>{const r=stage.getBoundingClientRect(),u=S/r.width;return[(e.clientX-r.left)*u,(e.clientY-r.top)*u]};
+const clamp=v=>Math.max(0,Math.min(S,v));
+
+function bind(it){
+  const el=it.el;
+  el.addEventListener('pointerdown',e=>{
+    e.stopPropagation();select(it);
+    stage.appendChild(el);items=items.filter(o=>o!==it);items.push(it);
+    const t=e.target;
+    if(t.classList.contains('del')){remove(it);return}
+    el.setPointerCapture(e.pointerId);stage.classList.add('dragging');
+    let move;
+    if(t.classList.contains('rot')){
+      const [x0,y0]=toStage(e),a0=Math.atan2(y0-it.y,x0-it.x),d0=Math.hypot(x0-it.x,y0-it.y),r0=it.r,s0=it.s;
+      move=ev=>{const[x,y]=toStage(ev);it.r=r0+(Math.atan2(y-it.y,x-it.x)-a0)*180/Math.PI;it.s=Math.max(50,Math.min(700,s0*Math.hypot(x-it.x,y-it.y)/d0));place(it)};
+    }else{
+      const [x0,y0]=toStage(e),ox=x0-it.x,oy=y0-it.y;
+      move=ev=>{const[x,y]=toStage(ev);it.x=clamp(x-ox);it.y=clamp(y-oy);place(it)};
+    }
+    const up=()=>{stage.classList.remove('dragging');el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up)};
+    el.addEventListener('pointermove',move);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+  });
+}
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.st,.bar'))select(null)});
+
+// bowl picker: tap the bowl (not a sticker) to open the choices on the right
+const picker=document.getElementById('picker');
+const showPicker=on=>{picker.hidden=!on;stage.classList.toggle('bowl-on',on)};
+for(const k in BOWLS){
+  const b=document.createElement('button');b.type='button';b.dataset.k=k;b.setAttribute('aria-pressed',k===bowlKey);
+  b.innerHTML=`<img alt="" src="${ASSETS[k]}">${BOWLS[k]}`;
+  b.addEventListener('click',()=>{bowlKey=k;bowlEl.src=ASSETS[k];picker.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.k===k))});
+  picker.appendChild(b);
+}
+document.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.picker'))return;
+  if(e.target.closest('.st,.bar')){showPicker(false);return}
+  if(stage.contains(e.target)){
+    const[x,y]=toStage(e),nx=(x-(BOWL.x+BOWL.w/2))/(BOWL.w/2),ny=(y-(BOWL.y+BOWL.h/2))/(BOWL.h/2);
+    showPicker(nx*nx+ny*ny<=1);return;
+  }
+  showPicker(false);
+});
+document.addEventListener('keydown',e=>{if(sel&&(e.key==='Delete'||e.key==='Backspace')&&!/INPUT|TEXTAREA/.test(document.activeElement.tagName))remove(sel)});
+
+// toolbar: tap to drop into the bowl, or drag straight onto the bowl
+const tray=document.getElementById('tray'),tip=document.getElementById('tip');
+let tipTimer;
+const showTip=(d,btn,ms)=>{
+  tip.innerHTML=`<b>${d.name}</b> · ${d.tip}`;tip.hidden=false;
+  const r=btn.getBoundingClientRect(),half=tip.offsetWidth/2;
+  tip.style.left=Math.max(16+half,Math.min(innerWidth-16-half,r.left+r.width/2))+'px';
+  clearTimeout(tipTimer);if(ms)tipTimer=setTimeout(()=>tip.hidden=true,ms);
+};
+for(const k in STICKERS){
+  const d=STICKERS[k],label=`${d.name}, ${d.tip}`;
+  const b=document.createElement('button');b.type='button';b.setAttribute('aria-label',label);
+  b.innerHTML=`<img alt="" src="${ASSETS[k]}">`;
+  b.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse')showTip(d,b)});
+  b.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')tip.hidden=true});
+  b.addEventListener('pointerdown',e=>{
+    const sx=e.clientX,sy=e.clientY;let ghost=null;
+    const move=ev=>{
+      if(!ghost&&Math.hypot(ev.clientX-sx,ev.clientY-sy)>8){
+        ghost=document.createElement('img');ghost.className='ghost';ghost.src=ASSETS[k];
+        ghost.style.width=(d.size/S*stage.getBoundingClientRect().width)+'px';document.body.appendChild(ghost);
+      }
+      if(ghost){ghost.style.left=ev.clientX+'px';ghost.style.top=ev.clientY+'px'}
+    };
+    const up=ev=>{
+      window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);
+      if(ghost){ghost.remove();const r=stage.getBoundingClientRect();
+        if(ev.type==='pointerup'&&ev.clientX>r.left&&ev.clientX<r.right&&ev.clientY>r.top&&ev.clientY<r.bottom){const[x,y]=toStage(ev);add(k,x,y)}}
+      else if(ev.type==='pointerup'){add(k);if(ev.pointerType!=='mouse')showTip(d,b,1800)}
+    };
+    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
+  });
+  tray.appendChild(b);
+}
+document.getElementById('clear').addEventListener('click',()=>items.slice().forEach(remove));
+
+// guide: shown on entry, then removed from the page
+const guide=document.getElementById('guide');
+document.getElementById('start').addEventListener('click',()=>{guide.classList.add('out');setTimeout(()=>guide.remove(),350)});
+
+// message: at most 3 lines, measured exactly as the saved image wraps it
+const limitEl=document.getElementById('limit'),mctx=document.createElement('canvas').getContext('2d');
+const msgLines=v=>{mctx.font='400 28px "Gowun Batang", serif';return wrap(mctx,v.trim(),640).length};
+let lastOk='';
+msg.addEventListener('input',()=>{
+  if(msgLines(msg.value)>3){const pos=Math.max(0,msg.selectionStart-(msg.value.length-lastOk.length));msg.value=lastOk;msg.setSelectionRange(pos,pos);
+    limitEl.textContent='3줄까지만 적을 수 있어요';limitEl.classList.add('hit');clearTimeout(limitEl.t);
+    limitEl.t=setTimeout(()=>{limitEl.textContent='새해 인사는 3줄까지 적을 수 있어요';limitEl.classList.remove('hit')},1800)}
+  else lastOk=msg.value;
+});
+// ---- export: poster layout (title + meta on top, bowl centred, message under it, rule + sender/logo at the foot) ----
+function wrap(ctx,text,maxW){
+  const out=[];
+  for(const para of text.split('\n')){
+    let line='';
+    for(const word of para.split(/(\s+)/)){
+      const t=line+word;
+      if(ctx.measureText(t).width>maxW&&line.trim()){out.push(line.trim());line=word.trimStart()}else line=t;
+      while(ctx.measureText(line).width>maxW){let i=line.length;while(i>1&&ctx.measureText(line.slice(0,i)).width>maxW)i--;out.push(line.slice(0,i));line=line.slice(i)}
+    }
+    out.push(line.trim());
+  }
+  return out.filter((l,i,a)=>l||i<a.length-1);
+}
+// current editor state as plain data (what the archive stores)
+const snapshot=()=>({bowl:bowlKey,msg:msg.value.trim(),from:from.value.trim(),
+  items:items.map(i=>({type:i.type,x:Math.round(i.x),y:Math.round(i.y),s:Math.round(i.s),r:Math.round(i.r)}))});
+// draw a bowl composition (stage units) at scale k with top-left (x,y)
+function drawBowl(ctx,st,x,y,k){
+  ctx.save();ctx.beginPath();ctx.rect(x,y,S*k,S*k);ctx.clip();ctx.translate(x,y);ctx.scale(k,k);
+  ctx.drawImage(imgs[st.bowl]||imgs['bowl-brass'],BOWL.x,BOWL.y,BOWL.w,BOWL.h);
+  for(const it of st.items){const img=imgs[it.type];if(!img)continue;const w=it.s,h=it.s*ratio(it.type);
+    ctx.save();ctx.translate(it.x,it.y);ctx.rotate(it.r*Math.PI/180);ctx.drawImage(img,-w/2,-h/2,w,h);ctx.restore()}
+  ctx.restore();
+}
+function renderPoster(st){
+  const W=1200,H=1600,M=88;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');
+  ctx.fillStyle='#f2eee6';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#4a4844';ctx.textBaseline='alphabetic';
+  const used=[...new Set(st.items.map(i=>STICKERS[i.type]).filter(d=>d&&d.mean).map(d=>`${d.name} ${d.mean}`))];
+  ctx.font='400 22px "Gowun Batang", serif';
+  // top row, two columns: year on the left, what went into the bowl on the right
+  ctx.fillText(`${YEAR}  ${YEAR_NAME}`,M,M+22);
+  wrap(ctx,(used.length?used:['빈 그릇']).join(' · '),W/2-M).slice(0,3).forEach((l,i)=>ctx.fillText(l,W/2,M+22+i*34));
+  // image zone sits between the header (ends ~180) and the message
+  const k=0.97,bw=S*k,by=205;drawBowl(ctx,st,(W-bw)/2,by,k);
+  ctx.textAlign='center';ctx.font='400 28px "Gowun Batang", serif';
+  wrap(ctx,st.msg,640).slice(0,3).forEach((l,i)=>ctx.fillText(l,W/2,by+bw+80+i*48));
+  ctx.textAlign='left';
+  const fy=H-M-44;ctx.fillRect(M,fy,W-M*2,1.5);
+  ctx.font='400 24px "Gowun Batang", serif';ctx.fillText(st.from?`From. ${st.from}`:'',M,fy+48);
+  if(imgs.logo&&imgs.logo.naturalWidth){const lw=150,lh=lw*ratio('logo');ctx.drawImage(imgs.logo,W-M-lw,fy+48-lh+2,lw,lh)}
+  return c;
+}
+
+// ---- shared archive (db): every saved bowl lands in "bowls" ----
+// shared archive lives behind /api/bowls (Vercel function + Upstash Redis)
+let saved=null;   // {id,key}: saving again in the same visit updates the same entry
+async function archive(st){
+  try{
+    const r=await fetch('/api/bowls',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...st,...(saved||{})})});
+    if(!r.ok)return r.status===429?'busy':'error';
+    const j=await r.json();saved={id:j.id,key:j.key};return 'ok';
+  }catch(e){return 'error'}
+}
+async function fetchBowls(){const r=await fetch('/api/bowls',{cache:'no-store'});if(!r.ok)throw new Error(r.status);return (await r.json()).bowls||[]}
+const modal=document.getElementById('modal'),saveNote=document.getElementById('saveNote');
+let lastPoster=null;
+document.getElementById('export').addEventListener('click',async()=>{
+  select(null);showPicker(false);await ready;await document.fonts.load('400 32px "Gowun Batang"').catch(()=>{});
+  const st=snapshot();
+  const url=renderPoster(st).toDataURL('image/png');document.getElementById('out').src=url;document.getElementById('download').href=url;
+  saveNote.textContent='아카이브에 담는 중이에요…';document.getElementById('toArchive').hidden=true;modal.hidden=false;
+  const r=await archive(st);
+  saveNote.textContent={ok:'떡국 아카이브에 담겼어요.',busy:'잠시 뒤에 다시 저장해 주세요.',error:'아카이브에 담지 못했어요. 이미지는 그대로 내려받을 수 있어요.'}[r];
+  document.getElementById('toArchive').hidden=r!=='ok';
+});
+document.getElementById('close').addEventListener('click',()=>modal.hidden=true);
+modal.addEventListener('click',e=>{if(e.target===modal)modal.hidden=true});
+document.getElementById('toArchive').addEventListener('click',()=>{modal.hidden=true;openArchive()});
+document.getElementById('openArchive').addEventListener('click',openArchive);
+document.getElementById('closeArchive').addEventListener('click',closeArchive);
+
+// archive view: an endless table of bowls; drag to move, scroll / pinch to zoom
+const arc=document.getElementById('archive'),world=document.getElementById('world'),arcCount=document.getElementById('arcCount'),arcEmpty=document.getElementById('arcEmpty');
+const CELL_W=380,CELL_H=440,THUMB=300;
+let view={x:0,y:0,z:1},poll=null,entries=[],nodes=new Map();
+const clean=d=>{ // shared data is untrusted: keep only known shapes
+  const it=Array.isArray(d.items)?d.items.slice(0,60).filter(i=>i&&STICKERS[i.type]).map(i=>({type:i.type,x:+i.x||0,y:+i.y||0,s:Math.max(20,Math.min(800,+i.s||100)),r:+i.r||0})):[];
+  return {bowl:BOWLS[d.bowl]?d.bowl:'bowl-brass',items:it,msg:String(d.msg||'').slice(0,120),from:String(d.from||'').slice(0,20),createdAt:+d.createdAt||0};
+};
+function spiral(n){ // square spiral of grid cells, newest in the middle
+  let x=0,y=0,dx=1,dy=0,len=1,step=0,turn=0;const out=[];
+  for(let i=0;i<n;i++){out.push([x,y]);x+=dx;y+=dy;if(++step===len){step=0;[dx,dy]=[-dy,dx];if(++turn%2===0)len++}}
+  return out;
+}
+const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return (h>>>0)/4294967295};
+function layout(){
+  const pos=spiral(entries.length);
+  entries.forEach((e,i)=>{
+    let el=nodes.get(e.id);
+    if(!el){
+      el=document.createElement('button');el.type='button';el.className='item';
+      const c=document.createElement('canvas');c.width=c.height=THUMB*2;el.appendChild(c);
+      const tag=document.createElement('span');tag.className='tag';el.appendChild(tag);
+      el.addEventListener('click',ev=>{if(dragMoved)return;showEntry(el._st)});
+      world.appendChild(el);nodes.set(e.id,el);
+    }
+    if(el._sig!==e.sig){el._sig=e.sig;el._st=e.st;
+      const c=el.firstChild,ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);drawBowl(ctx,e.st,0,0,c.width/S);
+      el.querySelector('.tag').textContent=e.st.from||'익명';el.setAttribute('aria-label',`${e.st.from||'익명'}의 떡국`);
+    }
+    const j=hash(e.id),[gx,gy]=pos[i];
+    el.style.transform=`translate(${gx*CELL_W+(j-.5)*90-THUMB/2}px,${gy*CELL_H+(hash(e.id+'y')-.5)*80-THUMB/2}px)`;
+  });
+  for(const [id,el] of nodes)if(!entries.some(e=>e.id===id)){el.remove();nodes.delete(id)}
+  arcCount.textContent=`떡국 ${entries.length}그릇`;arcEmpty.hidden=entries.length>0;
+}
+const apply=()=>{world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.z})`};
+async function openArchive(){
+  arc.hidden=false;document.body.classList.add('arc-open');
+  view={x:innerWidth/2,y:innerHeight/2,z:innerWidth<600?.6:.85};apply();
+  await ready;
+  const load=async()=>{
+    try{const list=await fetchBowls();
+      entries=list.map(d=>{const st=clean(d);return {id:String(d.id),st,sig:JSON.stringify(st)}});layout();
+    }catch(e){if(!entries.length){arcEmpty.hidden=false;arcEmpty.querySelector('p').textContent='아카이브를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.'}}
+  };
+  await load();clearInterval(poll);poll=setInterval(load,15000);   // new bowls from others show up while it is open
+}
+function closeArchive(){arc.hidden=true;document.body.classList.remove('arc-open');clearInterval(poll);poll=null}
+function showEntry(st){
+  const url=renderPoster(st).toDataURL('image/png');document.getElementById('out').src=url;document.getElementById('download').href=url;
+  saveNote.textContent=st.from?`${st.from} 님의 떡국`:'';document.getElementById('toArchive').hidden=true;modal.hidden=false;
+}
+// pan + zoom
+const ptrs=new Map();let dragMoved=false,pinch=null;
+arc.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.arc-ui'))return;
+  document.querySelector('.arc-hint').classList.add('gone');
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});dragMoved=false;arc.setPointerCapture(e.pointerId);arc.classList.add('grabbing');
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:view.z}}
+});
+arc.addEventListener('pointermove',e=>{
+  const p=ptrs.get(e.pointerId);if(!p)return;
+  if(ptrs.size===2&&pinch){p.x=e.clientX;p.y=e.clientY;const [a,b]=[...ptrs.values()];
+    zoomAt((a.x+b.x)/2,(a.y+b.y)/2,pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d);dragMoved=true;return}
+  const dx=e.clientX-p.x,dy=e.clientY-p.y;if(Math.abs(dx)+Math.abs(dy)>3)dragMoved=true;
+  p.x=e.clientX;p.y=e.clientY;view.x+=dx;view.y+=dy;apply();
+});
+const endPtr=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size)arc.classList.remove('grabbing')};
+arc.addEventListener('pointerup',endPtr);arc.addEventListener('pointercancel',endPtr);
+function zoomAt(cx,cy,z){z=Math.max(.25,Math.min(3,z));view.x=cx-(cx-view.x)*z/view.z;view.y=cy-(cy-view.y)*z/view.z;view.z=z;apply()}
+arc.addEventListener('wheel',e=>{e.preventDefault();document.querySelector('.arc-hint').classList.add('gone');zoomAt(e.clientX,e.clientY,view.z*Math.exp(-e.deltaY*0.0015))},{passive:false});
+</script>
+
+</body>
+</html>
