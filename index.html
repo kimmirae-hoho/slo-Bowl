@@ -67,6 +67,11 @@ body{font-family:var(--serif);margin:0;overflow:hidden}
   box-shadow:0 8px 24px rgba(30,25,15,.25);max-width:calc(100vw - 32px);box-sizing:border-box;z-index:5}
 .tray{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
 .tray::-webkit-scrollbar{display:none}
+.bar .tray button{touch-action:pan-x}
+/* soft edge where more stickers sit off-screen */
+.tray.more-l{-webkit-mask-image:linear-gradient(to right,transparent,#000 36px);mask-image:linear-gradient(to right,transparent,#000 36px)}
+.tray.more-r{-webkit-mask-image:linear-gradient(to left,transparent,#000 36px);mask-image:linear-gradient(to left,transparent,#000 36px)}
+.tray.more-l.more-r{-webkit-mask-image:linear-gradient(to right,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,transparent,#000 36px,#000 calc(100% - 36px),transparent)}
 .bar button{flex:none;width:48px;height:48px;border:0;border-radius:10px;background:transparent;color:inherit;cursor:pointer;
   display:flex;align-items:center;justify-content:center;padding:6px;box-sizing:border-box;touch-action:none}
 .bar button:hover{background:var(--bar-hover)}
@@ -314,9 +319,12 @@ for(const k in STICKERS){
   b.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse')showTip(d,b)});
   b.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')tip.hidden=true});
   b.addEventListener('pointerdown',e=>{
-    const sx=e.clientX,sy=e.clientY;let ghost=null;
+    const sx=e.clientX,sy=e.clientY;let ghost=null,moved=false;
     const move=ev=>{
-      if(!ghost&&Math.hypot(ev.clientX-sx,ev.clientY-sy)>8){
+      const dx=ev.clientX-sx,dy=ev.clientY-sy;
+      if(Math.hypot(dx,dy)>8)moved=true;
+      // on touch, sideways swipes scroll the tray; only an upward pull picks the sticker up
+      if(!ghost&&Math.hypot(dx,dy)>8&&(e.pointerType==='mouse'||-dy>Math.abs(dx))){
         ghost=document.createElement('img');ghost.className='ghost';ghost.src=ASSETS[k];
         ghost.style.width=(d.size/S*stage.getBoundingClientRect().width)+'px';document.body.appendChild(ghost);
       }
@@ -326,12 +334,16 @@ for(const k in STICKERS){
       window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);
       if(ghost){ghost.remove();const r=stage.getBoundingClientRect();
         if(ev.type==='pointerup'&&ev.clientX>r.left&&ev.clientX<r.right&&ev.clientY>r.top&&ev.clientY<r.bottom){const[x,y]=toStage(ev);add(k,x,y)}}
-      else if(ev.type==='pointerup'){add(k);if(ev.pointerType!=='mouse')showTip(d,b,1800)}
+      else if(ev.type==='pointerup'&&!moved){add(k);if(ev.pointerType!=='mouse')showTip(d,b,1800)}
     };
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
   });
   tray.appendChild(b);
 }
+const edges=()=>{const m=tray.scrollWidth-tray.clientWidth;
+  tray.classList.toggle('more-l',tray.scrollLeft>2);tray.classList.toggle('more-r',tray.scrollLeft<m-2)};
+tray.addEventListener('scroll',edges,{passive:true});addEventListener('resize',edges);edges();
+tray.addEventListener('wheel',e=>{if(tray.scrollWidth>tray.clientWidth&&Math.abs(e.deltaY)>Math.abs(e.deltaX)){tray.scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 document.getElementById('clear').addEventListener('click',()=>items.slice().forEach(remove));
 
 // guide: shown on entry, then removed from the page
